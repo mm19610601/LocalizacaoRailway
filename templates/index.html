@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Sistema de Rastreamento{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <!-- Sidebar with filters -->
+        <div class="col-lg-3 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-filter me-2"></i>Filtros
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="filterForm">
+                        <div class="mb-3">
+                            <label for="userSelect" class="form-label">Utilizador</label>
+                            <select class="form-select" id="userSelect">
+                                <option value="">Todos os utilizadores</option>
+                                {% for user in users %}
+                                <option value="{{ user.id }}">{{ user.nome_completo or user.username }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="startDate" class="form-label">Data Início</label>
+                            <input type="date" class="form-control" id="startDate">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="endDate" class="form-label">Data Fim</label>
+                            <input type="date" class="form-control" id="endDate">
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="button" class="btn btn-primary" onclick="updateMap()">
+                                <i class="fas fa-search me-1"></i>Aplicar Filtros
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="clearFilters()">
+                                <i class="fas fa-times me-1"></i>Limpar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Statistics Card -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>Estatísticas
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <span>Total de Localizações:</span>
+                        <span class="badge bg-primary" id="totalLocations">{{ total_locations }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mt-2">
+                        <span>Utilizadores Ativos:</span>
+                        <span class="badge bg-success">{{ users|length }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mt-2">
+                        <span>Últimas 24h:</span>
+                        <span class="badge bg-info" id="recent24h">{{ total_locations }}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Add Location Form -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-plus me-2"></i>Adicionar Localização
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('add_location') }}">
+                        <div class="mb-2">
+                            <select name="user_id" class="form-select form-select-sm" required>
+                                <option value="">Selecionar utilizador</option>
+                                {% for user in users %}
+                                <option value="{{ user.id }}">{{ user.nome_completo or user.username }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="row">
+                            <div class="col-6">
+                                <input type="number" name="latitude" class="form-control form-control-sm" 
+                                       placeholder="Latitude" step="0.000001" required>
+                            </div>
+                            <div class="col-6">
+                                <input type="number" name="longitude" class="form-control form-control-sm" 
+                                       placeholder="Longitude" step="0.000001" required>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <input type="number" name="precisao" class="form-control form-control-sm" 
+                                   placeholder="Precisão (metros)" step="0.01">
+                        </div>
+                        <div class="d-grid mt-2">
+                            <button type="submit" class="btn btn-success btn-sm">
+                                <i class="fas fa-map-pin me-1"></i>Adicionar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Map Container -->
+        <div class="col-lg-9">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-globe me-2"></i>Mapa de Localizações
+                    </h5>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-primary" onclick="fitMapBounds()">
+                            <i class="fas fa-expand me-1"></i>Ajustar Zoom
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="toggleHeatmap()">
+                            <i class="fas fa-fire me-1"></i>Mapa de Calor
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div id="map" style="height: 600px; width: 100%;"></div>
+                </div>
+            </div>
+            
+            <!-- Recent Locations Table -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-clock me-2"></i>Localizações Recentes
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Utilizador</th>
+                                    <th>Localização</th>
+                                    <th>Precisão</th>
+                                    <th>Timestamp</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for location in locations[:10] %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ location.nome_completo or location.username }}</strong>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ "%.6f"|format(location.latitude) }}, {{ "%.6f"|format(location.longitude) }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        {% if location.precisao %}
+                                        <span class="badge bg-secondary">{{ "%.1f"|format(location.precisao) }}m</span>
+                                        {% else %}
+                                        <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small>{{ location.timestamp }}</small>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary" 
+                                                onclick="centerMapOn({{ location.latitude }}, {{ location.longitude }})">
+                                            <i class="fas fa-crosshairs"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% if locations|length > 10 %}
+                    <div class="text-center">
+                        <a href="{{ url_for('locations') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-list me-1"></i>Ver Todas as Localizações
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden data for JavaScript -->
+<script id="locationsData" type="application/json">{{ locations|tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+<script>
+// Initialize map with current locations
+document.addEventListener('DOMContentLoaded', function() {
+    const locationsData = JSON.parse(document.getElementById('locationsData').textContent);
+    initMap(locationsData);
+});
+
+// Update map with filtered data
+async function updateMap() {
+    const userId = document.getElementById('userSelect').value;
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    
+    const params = new URLSearchParams();
+    if (userId) params.append('user_id', userId);
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    
+    try {
+        const response = await fetch(`/api/locations?${params}`);
+        const locations = await response.json();
+        
+        updateMapMarkers(locations);
+        document.getElementById('totalLocations').textContent = locations.length;
+        
+    } catch (error) {
+        console.error('Error updating map:', error);
+        alert('Erro ao atualizar o mapa');
+    }
+}
+
+// Clear all filters
+function clearFilters() {
+    document.getElementById('userSelect').value = '';
+    document.getElementById('startDate').value = '';
+    document.getElementById('endDate').value = '';
+    
+    // Reload original data
+    const locationsData = JSON.parse(document.getElementById('locationsData').textContent);
+    updateMapMarkers(locationsData);
+    document.getElementById('totalLocations').textContent = locationsData.length;
+}
+
+// Set default end date to today
+document.getElementById('endDate').value = new Date().toISOString().split('T')[0];
+</script>
+{% endblock %}
