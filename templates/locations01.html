@@ -1,0 +1,361 @@
+{% extends "base.html" %}
+
+{% block title %}Localizações - Sistema de Rastreamento{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <!-- Filters Sidebar -->
+        <div class="col-lg-3 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-filter me-2"></i>Filtros de Pesquisa
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="{{ url_for('locations') }}">
+                        <div class="mb-3">
+                            <label for="user_id" class="form-label">Utilizador</label>
+                            <select name="user_id" class="form-select">
+                                <option value="">Todos os utilizadores</option>
+                                {% for user in users %}
+                                <option value="{{ user.id }}" 
+                                        {% if current_filters.user_id == user.id %}selected{% endif %}>
+                                    {{ user.nome_completo or user.username }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="start_date" class="form-label">Data Início</label>
+                            <input type="date" name="start_date" class="form-control" 
+                                   value="{{ current_filters.start_date or '' }}">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="end_date" class="form-label">Data Fim</label>
+                            <input type="date" name="end_date" class="form-control" 
+                                   value="{{ current_filters.end_date or '' }}">
+                        </div>
+
+                        <!-- Campos de localização automática -->
+                        <div class="mb-3">
+                            <label for="latitude" class="form-label">Latitude</label>
+                            <input type="text" id="latitude" name="latitude" class="form-control" 
+                                   value="{{ current_filters.latitude or '' }}" readonly>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="longitude" class="form-label">Longitude</label>
+                            <input type="text" id="longitude" name="longitude" class="form-control" 
+                                   value="{{ current_filters.longitude or '' }}" readonly>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-1"></i>Aplicar Filtros
+                            </button>
+                            <a href="{{ url_for('locations') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-1"></i>Limpar Filtros
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Export Options -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-download me-2"></i>Exportar Dados
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-success btn-sm" onclick="exportToCSV()">
+                            <i class="fas fa-file-csv me-1"></i>Exportar CSV
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" onclick="exportToJSON()">
+                            <i class="fas fa-file-code me-1"></i>Exportar JSON
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Locations Table -->
+        <div class="col-lg-9">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-map-marker-alt me-2"></i>Listagem de Localizações
+                    </h5>
+                    <div class="d-flex align-items-center">
+                        {% if pagination %}
+                        <span class="badge bg-info me-3">
+                            Total: {{ pagination.total }} registos
+                        </span>
+                        {% endif %}
+                        <a href="{{ url_for('index') }}" class="btn btn-outline-primary btn-sm">
+                            <i class="fas fa-map me-1"></i>Ver no Mapa
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if locations %}
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Utilizador</th>
+                                    <th>Latitude</th>
+                                    <th>Longitude</th>
+                                    <th>Precisão</th>
+                                    <th>Timestamp</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for location in locations %}
+                                <tr>
+                                    <td>{{ location.id }}</td>
+                                    <td>
+                                        <div>
+                                            <strong>{{ location.utilizador.nome_completo or location.utilizador.username }}</strong>
+                                            {% if location.utilizador.funcao %}
+                                            <br><small class="text-muted">{{ location.utilizador.funcao }}</small>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td><code>{{ "%.6f"|format(location.latitude) }}</code></td>
+                                    <td><code>{{ "%.6f"|format(location.longitude) }}</code></td>
+                                    <td>
+                                        {% if location.precisao %}
+                                        <span class="badge bg-secondary">{{ "%.1f"|format(location.precisao) }}m</span>
+                                        {% else %}
+                                        <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div>
+                                            <strong>{{ location.timestamp.strftime('%d/%m/%Y') }}</strong>
+                                            <br><small class="text-muted">{{ location.timestamp.strftime('%H:%M:%S') }}</small>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="https://www.google.com/maps?q={{ location.latitude }},{{ location.longitude }}" 
+                                               target="_blank" class="btn btn-outline-primary" title="Ver no Google Maps">
+                                                <i class="fas fa-external-link-alt"></i>
+                                            </a>
+                                            <button class="btn btn-outline-info" 
+                                                    onclick="showLocationDetails({{ location.id }}, {{ location.latitude }}, {{ location.longitude }})" 
+                                                    title="Detalhes">
+                                                <i class="fas fa-info-circle"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    {% if pagination and pagination.pages > 1 %}
+                    <nav aria-label="Navegação das páginas">
+                        <ul class="pagination pagination-sm justify-content-center">
+                            {% if pagination.has_prev %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('locations', page=pagination.prev_num, **current_filters) }}">
+                                    <i class="fas fa-chevron-left"></i>
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link"><i class="fas fa-chevron-left"></i></span>
+                            </li>
+                            {% endif %}
+
+                            {% for page_num in pagination.iter_pages() %}
+                                {% if page_num %}
+                                    {% if page_num != pagination.page %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('locations', page=page_num, **current_filters) }}">
+                                            {{ page_num }}
+                                        </a>
+                                    </li>
+                                    {% else %}
+                                    <li class="page-item active"><span class="page-link">{{ page_num }}</span></li>
+                                    {% endif %}
+                                {% else %}
+                                <li class="page-item disabled"><span class="page-link">…</span></li>
+                                {% endif %}
+                            {% endfor %}
+
+                            {% if pagination.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('locations', page=pagination.next_num, **current_filters) }}">
+                                    <i class="fas fa-chevron-right"></i>
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled"><span class="page-link"><i class="fas fa-chevron-right"></i></span></li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+
+                    <div class="text-center text-muted">
+                        Página {{ pagination.page }} de {{ pagination.pages }} 
+                        ({{ pagination.total }} registos no total)
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-map-marker-alt fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">Nenhuma localização encontrada</h5>
+                        <p class="text-muted">
+                            {% if current_filters.user_id or current_filters.start_date or current_filters.end_date %}
+                            Tente ajustar os filtros de pesquisa.
+                            {% else %}
+                            Ainda não existem localizações registadas no sistema.
+                            {% endif %}
+                        </p>
+                        <a href="{{ url_for('index') }}" class="btn btn-primary">
+                            <i class="fas fa-home me-1"></i>Voltar ao Dashboard
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Location Details Modal -->
+<div class="modal fade" id="locationModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-map-marker-alt me-2"></i>Detalhes da Localização</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="locationDetails"></div>
+                <div id="miniMap" style="height: 300px; width: 100%; margin-top: 20px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <a href="#" id="googleMapsLink" target="_blank" class="btn btn-primary">
+                    <i class="fas fa-external-link-alt me-1"></i>Ver no Google Maps
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showLocationDetails(id, lat, lng) {
+    document.getElementById('locationDetails').innerHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <strong>ID da Localização:</strong> ${id}<br>
+                <strong>Latitude:</strong> ${lat.toFixed(6)}<br>
+                <strong>Longitude:</strong> ${lng.toFixed(6)}
+            </div>
+            <div class="col-md-6">
+                <strong>Coordenadas DMS:</strong><br>
+                ${decimalToDMS(lat, lng)}
+            </div>
+        </div>
+    `;
+    document.getElementById('googleMapsLink').href = `https://www.google.com/maps?q=${lat},${lng}`;
+    const modal = new bootstrap.Modal(document.getElementById('locationModal'));
+    modal.show();
+    setTimeout(() => {
+        initMiniMap(lat, lng);
+    }, 300);
+}
+
+function initMiniMap(lat, lng) {
+    const miniMap = L.map('miniMap').setView([lat, lng], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(miniMap);
+    L.marker([lat, lng]).addTo(miniMap)
+        .bindPopup(`Localização: ${lat.toFixed(6)}, ${lng.toFixed(6)}`)
+        .openPopup();
+}
+
+function decimalToDMS(lat, lng) {
+    function toDMS(decimal, isLat) {
+        const absolute = Math.abs(decimal);
+        const degrees = Math.floor(absolute);
+        const minutes = Math.floor((absolute - degrees) * 60);
+        const seconds = ((absolute - degrees) * 60 - minutes) * 60;
+        const direction = isLat ? (decimal >= 0 ? 'N' : 'S') : (decimal >= 0 ? 'E' : 'W');
+        return `${degrees}° ${minutes}' ${seconds.toFixed(2)}" ${direction}`;
+    }
+    return `${toDMS(lat, true)}<br>${toDMS(lng, false)}`;
+}
+
+function exportToCSV() {
+    const params = new URLSearchParams(window.location.search);
+    params.append('format', 'csv');
+    const link = document.createElement('a');
+    link.href = `/locations?${params}`;
+    link.download = 'localizacoes.csv';
+    link.click();
+    alert('Funcionalidade de exportação CSV será implementada em breve');
+}
+
+function exportToJSON() {
+    alert('Funcionalidade de exportação JSON será implementada em breve');
+}
+
+// Preenche automaticamente latitude e longitude com a geolocalização do navegador
+document.addEventListener('DOMContentLoaded', function () {
+    if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+            function (position) {
+                const lat = position.coords.latitude.toFixed(6);
+                const lng = position.coords.longitude.toFixed(6);
+                const latInput = document.getElementById('latitude');
+                const lngInput = document.getElementById('longitude');
+                if (latInput && lngInput) {
+                    latInput.value = lat;
+                    lngInput.value = lng;
+                }
+            },
+            function (error) {
+                console.warn('Erro ao obter localização:', error.message);
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 5000,
+                maximumAge: 0
+            }
+        );
+    } else {
+        console.warn('Geolocalização não suportada neste navegador.');
+    }
+
+    const userSelect = document.querySelector('select[name="user_id"]');
+    const startDate = document.querySelector('input[name="start_date"]');
+    const endDate = document.querySelector('input[name="end_date"]');
+    
+    if (userSelect) {
+        userSelect.addEventListener('change', function() {
+            if (this.value !== '') {
+                this.form.submit();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
